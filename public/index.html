@@ -207,23 +207,39 @@ function setMode(m){
 
 function buildNav(){
   const volMap={};
-  ENGLISH.forEach(p=>{if(!volMap[p.volume])volMap[p.volume]=[];if(!volMap[p.volume].includes(p.portion))volMap[p.volume].push(p.portion);});
-  document.getElementById('portionsSidebar').innerHTML=Object.keys(volMap).sort((a,b)=>+a-+b).map(vol=>`<div class="vol-group"><div class="vol-header" onclick="this.classList.toggle('open')"><span>Volume ${vol}</span><span class="vol-arrow">▾</span></div><div class="vol-portions">${volMap[vol].map(p=>`<div class="portion-link" onclick="portionClick('${p.replace(/'/g,"\'")}',this)">${p}</div>`).join('')}</div></div>`).join('');
+  ENGLISH.forEach(p=>{
+    if(!volMap[p.volume])volMap[p.volume]=[];
+    if(!volMap[p.volume].includes(p.portion))volMap[p.volume].push(p.portion);
+  });
+  document.getElementById('portionsSidebar').innerHTML=Object.keys(volMap).sort((a,b)=>+a-+b).map(vol=>`
+    <div class="vol-group">
+      <div class="vol-header" onclick="this.classList.toggle('open')">
+        <span>Volume ${vol}</span><span class="vol-arrow">&#9662;</span>
+      </div>
+      <div class="vol-portions">
+        ${volMap[vol].map(p=>`<div class="portion-link" onclick="portionClick(this)" data-portion="${p.replace(/"/g,'&quot;')}">${p}</div>`).join('')}
+      </div>
+    </div>`).join('');
   const vs=document.getElementById('filterVol');
-  Object.keys(volMap).sort((a,b)=>+a-+b).forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=`Volume ${v}`;vs.appendChild(o);});
+  Object.keys(volMap).sort((a,b)=>+a-+b).forEach(v=>{
+    const o=document.createElement('option');o.value=v;o.textContent='Volume '+v;vs.appendChild(o);
+  });
   const ps=document.getElementById('filterPortion');
-  [...new Set(ENGLISH.map(p=>p.portion))].forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;ps.appendChild(o);});
+  [...new Set(ENGLISH.map(p=>p.portion))].forEach(p=>{
+    const o=document.createElement('option');o.value=p;o.textContent=p;ps.appendChild(o);
+  });
 }
 
-function portionClick(portion,el){
+function portionClick(el){
   document.querySelectorAll('.portion-link').forEach(l=>l.classList.remove('active'));
   el.classList.add('active');
   setMode('browse');
-  document.getElementById('filterPortion').value=portion;
+  document.getElementById('filterPortion').value=el.dataset.portion;
   onBrowseSearch();
 }
 
 function onBrowseSearch(){browsePage=1;runBrowse();}
+
 function runBrowse(){
   const q=document.getElementById('browseSearch').value.trim().toLowerCase();
   const vol=parseInt(document.getElementById('filterVol').value);
@@ -239,36 +255,74 @@ function runBrowse(){
   browseResults.sort((a,b)=>a.volume!==b.volume?a.volume-b.volume:a.portion!==b.portion?a.portion.localeCompare(b.portion):a.paragraph_number-b.paragraph_number);
   renderBrowse(q);
 }
+
 function renderBrowse(q){
   const container=document.getElementById('browseResults');
   const meta=document.getElementById('browseResultsMeta');
   const pag=document.getElementById('browsePagination');
   const total=browseResults.length;
-  if(total===0){meta.style.display='none';container.innerHTML=`<div class="browse-empty">${q?'No paragraphs found.':'Select a portion or search above.'}</div>`;pag.innerHTML='';return;}
+  if(total===0){
+    meta.style.display='none';
+    container.innerHTML='<div class="browse-empty">'+(q?'No paragraphs found.':'Select a portion or search above.')+'</div>';
+    pag.innerHTML='';return;
+  }
   meta.style.display='flex';
   document.getElementById('browseCount').textContent=total.toLocaleString();
   const portion=document.getElementById('filterPortion').value;
   const vol=document.getElementById('filterVol').value;
-  document.getElementById('browseTitle').textContent=portion||(vol?`Volume ${vol}`:'All Results');
+  document.getElementById('browseTitle').textContent=portion||(vol?'Volume '+vol:'All Results');
   const totalPages=Math.ceil(total/PAGE_SIZE);
   const items=browseResults.slice((browsePage-1)*PAGE_SIZE,browsePage*PAGE_SIZE);
-  container.innerHTML=items.map(p=>renderParaRow(p,q)).join('');
+  container.innerHTML='';
+  items.forEach(p=>container.appendChild(makeParaRow(p,q)));
   if(totalPages<=1){pag.innerHTML='';return;}
   let pages=[];
-  for(let i=1;i<=totalPages;i++){if(i===1||i===totalPages||(i>=browsePage-2&&i<=browsePage+2))pages.push(i);else if(pages[pages.length-1]!=='...')pages.push('...');}
-  pag.innerHTML=pages.map(p=>p==='...'?`<span style="color:#ccc;padding:4px">...</span>`:`<button class="page-btn ${p===browsePage?'active':''}" onclick="goPage(${p})">${p}</button>`).join('');
+  for(let i=1;i<=totalPages;i++){
+    if(i===1||i===totalPages||(i>=browsePage-2&&i<=browsePage+2))pages.push(i);
+    else if(pages[pages.length-1]!=='...')pages.push('...');
+  }
+  pag.innerHTML=pages.map(p=>p==='...'?'<span style="color:#ccc;padding:4px">...</span>':'<button class="page-btn'+(p===browsePage?' active':'')+'" onclick="goPage('+p+')">'+p+'</button>').join('');
 }
-function renderParaRow(para,q){
-  const araText=ARAMAIC[`${para.volume}|${para.portion}|${para.paragraph_number}`]||null;
-  const ref=`${para.portion}, Paragraph ${para.paragraph_number}`;
-  const id=`r-${para.volume}-${para.portion.replace(/\s/g,'_')}-${para.paragraph_number}`;
-  return `<div class="para-row" id="${id}"><div class="para-row-header" onclick="toggleRow('${id}')"><span class="para-row-ref">${ref}</span><span class="para-row-toggle">▾</span></div><div class="para-row-preview" onclick="toggleRow('${id}')">${escHtml(para.english.substring(0,110))}...</div><div class="para-col para-col-english"><div class="para-col-label">English <button class="copy-btn" onclick="copyT(event,'${escBt(para.english)}')">Copy</button></div><div class="english-body">${fmtEnglish(para.english,q)}</div></div><div class="para-col"><div class="para-col-label">Aramaic ${araText?`<button class="copy-btn" onclick="copyT(event,'${escBt(araText)}')">Copy</button>`:''}</div><div class="aramaic-body">${araText?escHtml(araText):'<em style="color:#aaa;font-size:.85rem">Not available</em>'}</div></div></div>`;
+
+function makeParaRow(para,q){
+  const araText=ARAMAIC[para.volume+'|'+para.portion+'|'+para.paragraph_number]||null;
+  const ref=para.portion+', Paragraph '+para.paragraph_number;
+  const id='r'+para.volume+para.portion.replace(/\s/g,'_')+para.paragraph_number;
+  const div=document.createElement('div');
+  div.className='para-row';div.id=id;
+  const header=document.createElement('div');
+  header.className='para-row-header';
+  header.innerHTML='<span class="para-row-ref">'+esc(ref)+'</span><span class="para-row-toggle">&#9662;</span>';
+  header.onclick=()=>div.classList.toggle('open');
+  const preview=document.createElement('div');
+  preview.className='para-row-preview';
+  preview.textContent=para.english.substring(0,110)+'...';
+  preview.onclick=()=>div.classList.toggle('open');
+  const engCol=document.createElement('div');
+  engCol.className='para-col para-col-english';
+  const engLabel=document.createElement('div');engLabel.className='para-col-label';
+  engLabel.textContent='English ';
+  const engCopy=document.createElement('button');engCopy.className='copy-btn';engCopy.textContent='Copy';
+  engCopy.onclick=(e)=>{e.stopPropagation();navigator.clipboard.writeText(para.english);engCopy.textContent='Done';setTimeout(()=>engCopy.textContent='Copy',1500);};
+  engLabel.appendChild(engCopy);
+  const engBody=document.createElement('div');engBody.className='english-body';engBody.innerHTML=fmtEnglish(para.english,q);
+  engCol.appendChild(engLabel);engCol.appendChild(engBody);
+  const araCol=document.createElement('div');araCol.className='para-col';
+  const araLabel=document.createElement('div');araLabel.className='para-col-label';araLabel.textContent='Aramaic ';
+  if(araText){const araCopy=document.createElement('button');araCopy.className='copy-btn';araCopy.textContent='Copy';araCopy.onclick=(e)=>{e.stopPropagation();navigator.clipboard.writeText(araText);araCopy.textContent='Done';setTimeout(()=>araCopy.textContent='Copy',1500);};araLabel.appendChild(araCopy);}
+  const araBody=document.createElement('div');araBody.className='aramaic-body';
+  araBody.innerHTML=araText?esc(araText):'<em style="color:#aaa;font-size:.85rem">Not available</em>';
+  araCol.appendChild(araLabel);araCol.appendChild(araBody);
+  div.appendChild(header);div.appendChild(preview);div.appendChild(engCol);div.appendChild(araCol);
+  return div;
 }
+
 function toggleRow(id){document.getElementById(id).classList.toggle('open');}
 function goPage(p){browsePage=p;runBrowse();window.scrollTo({top:0,behavior:'smooth'});}
 function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}}
 function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px';}
 function sendChip(el){document.getElementById('chatInput').value=el.textContent;sendMessage();}
+
 async function sendMessage(){
   if(isThinking)return;
   const input=document.getElementById('chatInput');
@@ -281,43 +335,27 @@ async function sendMessage(){
   isThinking=true;document.getElementById('sendBtn').disabled=true;
   const thinkId=appendThinking();
   try{
-    const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:2500,system:buildSystemPrompt(),messages:[{role:'user',content:text}]})});
+    const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:2500,system:buildSystemPrompt(),messages:[{role:'user',content:text}]})});
     removeThinking(thinkId);
-    if(!resp.ok){const err=await resp.json();appendAssistantText(`Error: ${err.error?.message||'Something went wrong.'}`);return;}
+    if(!resp.ok){const err=await resp.json();appendAssistantText('Error: '+(err.error&&err.error.message?err.error.message:'Something went wrong.'));return;}
     const data=await resp.json();
-    renderTeaching(data.content[0]?.text||'');
-  }catch(e){removeThinking(thinkId);appendAssistantText(`Connection error: ${e.message}`);}
+    renderTeaching(data.content[0]&&data.content[0].text?data.content[0].text:'');
+  }catch(e){removeThinking(thinkId);appendAssistantText('Connection error: '+e.message);}
   finally{isThinking=false;document.getElementById('sendBtn').disabled=false;}
 }
+
 function buildSystemPrompt(){
   const portions={};
-  ENGLISH.forEach(p=>{const k=`Vol${p.volume}|${p.portion}`;if(!portions[k])portions[k]={min:p.paragraph_number,max:p.paragraph_number};else{portions[k].min=Math.min(portions[k].min,p.paragraph_number);portions[k].max=Math.max(portions[k].max,p.paragraph_number);}});
-  const index=Object.entries(portions).map(([k,v])=>`${k} (§${v.min}–§${v.max})`).join('
-');
-  return `You are a Zohar teaching assistant. The application contains the full text of the Zohar, Volumes 1–16, with all English and Aramaic text embedded.
-
-YOUR ONLY JOB: Find relevant paragraphs and return them using reference tags. The application replaces these tags with the actual verbatim text.
-
-AVAILABLE PORTIONS:
-${index}
-
-REFERENCE TAG FORMAT (use exactly):
-[ZOHAR:volume|portion|paragraph_number]
-Example: [ZOHAR:2|Bereshit A|47]
-
-STRICT RULES:
-- NEVER write, quote, translate, or paraphrase any Zohar text yourself
-- ONLY use [ZOHAR:] tags for all Zohar content
-- Use "Kabbalists" not "Rabbis", "spiritual work" not "Torah study"
-- When identifying a passage, refer to it as: [Portion Name], paragraph [N]
-
-RESPONSE STRUCTURE:
-1. Brief spiritual introduction (2-3 sentences, your own words)
-2. [ZOHAR:] tags for 2-4 relevant paragraphs with brief connective commentary between them
-3. A line starting with exactly: SUMMARY:
-   Followed by 2-3 sentences summarizing the teaching
-4. End with exactly: PRACTICAL: Would you like a practical application of this teaching — how to bring this wisdom into your daily life?`;
+  ENGLISH.forEach(p=>{
+    const k='Vol'+p.volume+'|'+p.portion;
+    if(!portions[k])portions[k]={min:p.paragraph_number,max:p.paragraph_number};
+    else{portions[k].min=Math.min(portions[k].min,p.paragraph_number);portions[k].max=Math.max(portions[k].max,p.paragraph_number);}
+  });
+  const index=Object.entries(portions).map(([k,v])=>k+' ('+String.fromCharCode(167)+v.min+'-'+String.fromCharCode(167)+v.max+')').join('\n');
+  return 'You are a Zohar teaching assistant. The application contains the full text of the Zohar, Volumes 1-16.\n\nYOUR ONLY JOB: Find relevant paragraphs and return them using reference tags. The application replaces these tags with the actual verbatim text.\n\nAVAILABLE PORTIONS:\n'+index+'\n\nREFERENCE TAG FORMAT:\n[ZOHAR:volume|portion|paragraph_number]\nExample: [ZOHAR:2|Bereshit A|47]\n\nSTRICT RULES:\n- NEVER write, quote, translate, or paraphrase any Zohar text yourself\n- ONLY use [ZOHAR:] tags for all Zohar content\n- Use Kabbalists not Rabbis\n- Refer to passages as: [Portion Name], paragraph [N]\n\nRESPONSE STRUCTURE:\n1. Brief spiritual introduction (2-3 sentences, your own words)\n2. [ZOHAR:] tags for 2-4 relevant paragraphs with brief connective commentary\n3. A line starting with exactly: SUMMARY:\n   Then 2-3 sentences summarizing the teaching\n4. End with exactly: PRACTICAL: Would you like a practical application of this teaching?';
 }
+
 function renderTeaching(text){
   const container=document.getElementById('chatMessages');
   const msgEl=document.createElement('div');msgEl.className='msg assistant';
@@ -331,26 +369,42 @@ function renderTeaching(text){
     if(m){bubble.appendChild(buildZoharBlock(+m[1],m[2],+m[3]));}
     else if(part.trim()){const p=document.createElement('p');p.className='ai-commentary';p.textContent=part.trim();bubble.appendChild(p);}
   });
-  if(summary){const sd=document.createElement('div');sd.className='teaching-summary';sd.innerHTML=`<div class="teaching-summary-label">Summary</div><div class="teaching-summary-text">${escHtml(summary)}</div>${practical?`<div class="practical-prompt" onclick="askPractical()">${escHtml(practical)}</div>`:''}`;bubble.appendChild(sd);}
+  if(summary){
+    const sd=document.createElement('div');sd.className='teaching-summary';
+    const lbl=document.createElement('div');lbl.className='teaching-summary-label';lbl.textContent='Summary';
+    const txt=document.createElement('div');txt.className='teaching-summary-text';txt.textContent=summary;
+    sd.appendChild(lbl);sd.appendChild(txt);
+    if(practical){const pp=document.createElement('div');pp.className='practical-prompt';pp.textContent=practical;pp.onclick=()=>{document.getElementById('chatInput').value='Yes, please give me a practical application.';sendMessage();};sd.appendChild(pp);}
+    bubble.appendChild(sd);
+  }
   msgEl.appendChild(bubble);container.appendChild(msgEl);container.scrollTop=container.scrollHeight;
 }
-function askPractical(){document.getElementById('chatInput').value='Yes, please give me a practical application.';sendMessage();}
+
 function buildZoharBlock(vol,portion,paraNum){
   const eng=ENGLISH.find(p=>p.volume===vol&&p.portion===portion&&p.paragraph_number===paraNum);
-  const araText=ARAMAIC[`${vol}|${portion}|${paraNum}`]||null;
+  const araText=ARAMAIC[vol+'|'+portion+'|'+paraNum]||null;
   const block=document.createElement('div');block.className='zohar-block';
-  if(!eng){block.innerHTML=`<div class="zohar-block-ref">Paragraph not found: ${portion}, §${paraNum}</div>`;return block;}
-  block.innerHTML=`<div class="zohar-block-ref"><span>${portion}, Paragraph ${paraNum}</span><button class="copy-btn" onclick="copyT(event,'${escBt(eng.english)}')">Copy</button></div><div class="zohar-block-body"><div class="zohar-english-col">${fmtEnglish(eng.english,'')}</div><div class="zohar-aramaic-col">${araText?escHtml(araText):'<em style="color:#aaa;font-size:.85rem">Aramaic not available</em>'}</div></div>`;
+  if(!eng){block.innerHTML='<div class="zohar-block-ref">Paragraph not found: '+esc(portion)+', '+paraNum+'</div>';return block;}
+  const ref=document.createElement('div');ref.className='zohar-block-ref';
+  const refSpan=document.createElement('span');refSpan.textContent=portion+', Paragraph '+paraNum;
+  const copyBtn=document.createElement('button');copyBtn.className='copy-btn';copyBtn.textContent='Copy';
+  copyBtn.onclick=(e)=>{e.stopPropagation();navigator.clipboard.writeText(eng.english);copyBtn.textContent='Done';setTimeout(()=>copyBtn.textContent='Copy',1500);};
+  ref.appendChild(refSpan);ref.appendChild(copyBtn);
+  const body=document.createElement('div');body.className='zohar-block-body';
+  const engCol=document.createElement('div');engCol.className='zohar-english-col';engCol.innerHTML=fmtEnglish(eng.english,'');
+  const araCol=document.createElement('div');araCol.className='zohar-aramaic-col';
+  araCol.innerHTML=araText?esc(araText):'<em style="color:#aaa;font-size:.85rem">Aramaic not available</em>';
+  body.appendChild(engCol);body.appendChild(araCol);
+  block.appendChild(ref);block.appendChild(body);
   return block;
 }
-function appendUserMsg(t){const c=document.getElementById('chatMessages');const el=document.createElement('div');el.className='msg user';el.innerHTML=`<div class="msg-bubble">${escHtml(t)}</div>`;c.appendChild(el);c.scrollTop=c.scrollHeight;}
-function appendAssistantText(t){const c=document.getElementById('chatMessages');const el=document.createElement('div');el.className='msg assistant';el.innerHTML=`<div class="msg-bubble"><p class="ai-commentary">${escHtml(t)}</p></div>`;c.appendChild(el);c.scrollTop=c.scrollHeight;}
-function appendThinking(){const c=document.getElementById('chatMessages');const id='t'+Date.now();const el=document.createElement('div');el.id=id;el.className='msg assistant';el.innerHTML=`<div class="msg-bubble"><div class="thinking"><div class="thinking-dots"><div class="thinking-dot"></div><div class="thinking-dot"></div><div class="thinking-dot"></div></div><span class="thinking-label">Searching the Zohar...</span></div></div>`;c.appendChild(el);c.scrollTop=c.scrollHeight;return id;}
+
+function appendUserMsg(t){const c=document.getElementById('chatMessages');const el=document.createElement('div');el.className='msg user';const b=document.createElement('div');b.className='msg-bubble';b.textContent=t;el.appendChild(b);c.appendChild(el);c.scrollTop=c.scrollHeight;}
+function appendAssistantText(t){const c=document.getElementById('chatMessages');const el=document.createElement('div');el.className='msg assistant';const b=document.createElement('div');b.className='msg-bubble';const p=document.createElement('p');p.className='ai-commentary';p.textContent=t;b.appendChild(p);el.appendChild(b);c.appendChild(el);c.scrollTop=c.scrollHeight;}
+function appendThinking(){const c=document.getElementById('chatMessages');const id='t'+Date.now();const el=document.createElement('div');el.id=id;el.className='msg assistant';el.innerHTML='<div class="msg-bubble"><div class="thinking"><div class="thinking-dots"><div class="thinking-dot"></div><div class="thinking-dot"></div><div class="thinking-dot"></div></div><span class="thinking-label">Searching the Zohar...</span></div></div>';c.appendChild(el);c.scrollTop=c.scrollHeight;return id;}
 function removeThinking(id){const el=document.getElementById(id);if(el)el.remove();}
-function fmtEnglish(text,q){let h=escHtml(text);h=h.replace(/\b([A-Z]{2,}(?:\s+[A-Z']{2,}){1,}(?:\s+[A-Z]{1,})*)\b/g,'<span class="ashlag-text">$1</span>');if(q){const e=q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');h=h.replace(new RegExp(`(${e})`,'gi'),'<mark>$1</mark>');}return h;}
-function copyT(e,text){e.stopPropagation();navigator.clipboard.writeText(text);const b=e.target,o=b.textContent;b.textContent='✓';setTimeout(()=>b.textContent=o,1500);}
-function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function escBt(s){return String(s).replace(/\\/g,'\\\\').replace(/`/g,'\\`').replace(/\$/g,'\\$').replace(/'/g,"\\'");}
+function fmtEnglish(text,q){let h=esc(text);h=h.replace(/([A-Z]{2,}(?:\s+[A-Z']{2,}){1,}(?:\s+[A-Z]{1,})*)/g,'<span class="ashlag-text">$1</span>');if(q){const e=q.replace(/[.*+?^${}()|[\]\]/g,'\$&');h=h.replace(new RegExp('('+e+')','gi'),'<mark>$1</mark>');}return h;}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 buildNav();setMode('chat');
 </script>
 </body>
